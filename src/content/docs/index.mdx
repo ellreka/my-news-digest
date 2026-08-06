@@ -1,0 +1,29 @@
+---
+title: ニュースダイジェスト
+tableOfContents: false
+---
+
+import { getCollection } from 'astro:content';
+
+export const digests = (await getCollection('docs'))
+	.filter((entry) => entry.id.startsWith('digests/'))
+	.sort((a, b) => (b.data.sidebar?.order ?? 0) - (a.data.sidebar?.order ?? 0));
+export const latest = digests[0];
+
+{latest && (
+	<p>
+		最新: <a href={`/${latest.id}/`}>{latest.data.title}</a>
+	</p>
+)}
+
+## 一覧
+
+<ul>
+	{digests.map((entry) => (
+		<li>
+			<a href={`/${entry.id}/`}>{entry.data.title}</a>
+		</li>
+	))}
+</ul>
+
+{digests.length === 0 && <p>まだダイジェストがありません。</p>}

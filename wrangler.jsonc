@@ -1,0 +1,24 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "my-news-digest",
+	"compatibility_date": "2026-08-06",
+
+	// 静的アセットのみ。Worker スクリプト（main）は不要
+	"assets": {
+		"directory": "./dist",
+		"not_found_handling": "404-page"
+	},
+
+	// TODO: 実ドメインに置換する（Cloudflare 上にゾーンが存在する必要あり）
+	"routes": [
+		{
+			"pattern": "news.example.com",
+			"custom_domain": true
+		}
+	],
+
+	// Cloudflare Access はカスタムドメインにのみ適用されるため、
+	// 認証を迂回できる workers.dev / preview URL は無効化する
+	"workers_dev": false,
+	"preview_urls": false
+}
