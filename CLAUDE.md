@@ -12,6 +12,8 @@ Cloudflare 上のサブドメインで公開するためのもの。
 
 ## やらないこと
 
+- **Inoreader の状態を変更しない。** 既読にする・スターを付ける等の書き込み系 API（`edit-tag`）は絶対に呼ばない。
+  既読は取り消せず、テストや再実行ができなくなるため。Inoreader へのアクセスは読み取り（GET）のみ。
 - `pnpm install` / `astro build` / `wrangler deploy` は実行しない。ビルドとデプロイは GitHub Actions の責務。
 - ダイジェスト md 以外のファイル（サイト設定、ワークフロー、docs）を変更しない。
 - シークレット（`INOREADER_*` 等）をリポジトリにコミットしない。

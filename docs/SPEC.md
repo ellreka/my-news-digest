@@ -7,7 +7,8 @@ GitHub リポジトリへの push を起点に Cloudflare 上のサブドメイ�
 
 - 生成（routine）と配信（サイト）を同一リポジトリで完結させる
 - UI は自作しない。Astro Starlight をほぼ素のまま使う
-- 状態管理はしない。既読管理は Inoreader 側を正とする（既存仕様のまま）
+- 状態管理はしない。Inoreader は読み取り専用で扱い、既読化などの書き込み操作は行わない
+  （既読は不可逆でテスト・再実行ができなくなるため）。取得範囲は時刻ベース（直近 24 時間）
 
 ## 全体フロー
 
@@ -110,6 +111,7 @@ Cloudflare Access:
 ## 制約・非機能
 
 - シークレット（INOREADER_*, GITHUB 関連）をリポジトリにコミットしない
+- Inoreader に対する書き込み系 API（`edit-tag` 等）は呼ばない
 - routine 実行環境の allowed domains に `www.inoreader.com` が必要（既存設定を維持）
 - 有料ソース要約を含むため一般公開しない（Access 必須 + noindex）
 - ダイジェスト以外のページ・機能は作らない（スコープ外: RSS, OG画像, タグ等）
