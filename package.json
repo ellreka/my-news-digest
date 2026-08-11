@@ -10,7 +10,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "deploy": "wrangler deploy"
+    "deploy": "pnpm run build && wrangler deploy"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.41.7",
@@ -19,8 +19,5 @@
   },
   "devDependencies": {
     "wrangler": "^4.119.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "sharp", "workerd"]
   }
 }
