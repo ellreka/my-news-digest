@@ -10,15 +10,15 @@
 	},
 
 	// TODO: 実ドメインに置換する（Cloudflare 上にゾーンが存在する必要あり）
-	"routes": [
-		{
-			"pattern": "news.example.com",
-			"custom_domain": true
-		}
-	],
+	// "routes": [
+	// 	{
+	// 		"pattern": "news.example.com",
+	// 		"custom_domain": true
+	// 	}
+	// ],
 
 	// Cloudflare Access はカスタムドメインにのみ適用されるため、
 	// 認証を迂回できる workers.dev / preview URL は無効化する
-	"workers_dev": false,
+	"workers_dev": true,
 	"preview_urls": false
 }
