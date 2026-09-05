@@ -2,6 +2,8 @@ const RATE_STORAGE_KEY = 'my-news-digest:ttsRate';
 const DEFAULT_RATE = 1;
 const MIN_RATE = 0.5;
 const MAX_RATE = 2;
+/** cancel() 直後に speak すると失敗する環境向けの待ち */
+const AFTER_CANCEL_MS = 40;
 
 type TtsElements = {
 	toolbar: HTMLElement;
@@ -11,6 +13,8 @@ type TtsElements = {
 	rateValue: HTMLElement;
 	unsupported: HTMLElement | null;
 };
+
+let pageCleanup: (() => void) | null = null;
 
 function isDigestPage(): boolean {
 	return /\/digests\//.test(location.pathname);
@@ -26,7 +30,9 @@ function collectBlocks(root: Element): HTMLElement[] {
 	const walk = (el: Element) => {
 		for (const child of Array.from(el.children)) {
 			const tag = child.tagName.toLowerCase();
-			if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'pre'].includes(tag)) {
+			// pre（コード）は読み上げ対象外
+			if (tag === 'pre') continue;
+			if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'].includes(tag)) {
 				pushIfText(child as HTMLElement);
 			} else if (['ul', 'ol', 'div', 'section', 'article'].includes(tag)) {
 				walk(child);
@@ -58,7 +64,23 @@ function pickJapaneseVoice(): SpeechSynthesisVoice | null {
 	return ja.find((v) => /google|premium|enhanced|neural/i.test(v.name)) ?? ja[0] ?? null;
 }
 
+function isCancelLikeError(error: string | undefined): boolean {
+	if (!error) return false;
+	const normalized = error.toLowerCase();
+	return (
+		normalized === 'interrupted' ||
+		normalized === 'canceled' ||
+		normalized === 'cancelled' ||
+		normalized === 'abort' ||
+		normalized === 'aborted'
+	);
+}
+
 function initTts() {
+	// View Transitions / astro:page-load の再入でリスナーが積み上がらないように掃除
+	pageCleanup?.();
+	pageCleanup = null;
+
 	if (!isDigestPage()) return;
 
 	const content = document.querySelector('.sl-markdown-content');
@@ -92,12 +114,22 @@ function initTts() {
 	for (const block of blocks) {
 		block.classList.add('tts-speakable');
 		block.title = 'ここから読み上げ';
+		if (!block.hasAttribute('tabindex')) block.tabIndex = 0;
+		block.setAttribute('role', 'button');
+		block.setAttribute('aria-label', 'ここから読み上げ');
 	}
 
 	let rate = readStoredRate();
 	let index = 0;
 	let speaking = false;
 	let voice: SpeechSynthesisVoice | null = null;
+	/** 意図した cancel 中は onerror で UI を落とさない */
+	let ignoringCancelErrors = false;
+	/** speakFrom 世代。古い onend / 遅延開始を無効化 */
+	let generation = 0;
+	let resumeTimer: ReturnType<typeof setTimeout> | null = null;
+	const ac = new AbortController();
+	const { signal } = ac;
 
 	const syncRateUi = () => {
 		els.rateInput.value = String(rate);
@@ -119,19 +151,40 @@ function initTts() {
 		els.stopBtn.disabled = !on;
 	};
 
+	const clearResumeTimer = () => {
+		if (resumeTimer !== null) {
+			clearTimeout(resumeTimer);
+			resumeTimer = null;
+		}
+	};
+
+	const markIntentionalCancel = () => {
+		ignoringCancelErrors = true;
+		window.setTimeout(() => {
+			ignoringCancelErrors = false;
+		}, AFTER_CANCEL_MS + 30);
+	};
+
 	const stop = () => {
+		clearResumeTimer();
+		generation += 1;
+		markIntentionalCancel();
 		speechSynthesis.cancel();
 		setSpeakingUi(false);
 		setActive(null);
 	};
 
 	const speakFrom = (start: number) => {
+		clearResumeTimer();
+		const gen = ++generation;
+		markIntentionalCancel();
 		speechSynthesis.cancel();
+
 		index = Math.max(0, Math.min(start, blocks.length - 1));
 		setSpeakingUi(true);
 
 		const speakNext = () => {
-			if (!speaking) return;
+			if (gen !== generation || !speaking) return;
 			if (index >= blocks.length) {
 				setSpeakingUi(false);
 				setActive(null);
@@ -150,65 +203,115 @@ function initTts() {
 			utter.lang = 'ja-JP';
 			if (voice) utter.voice = voice;
 			utter.onend = () => {
-				if (!speaking) return;
+				if (gen !== generation || !speaking) return;
 				index += 1;
 				speakNext();
 			};
-			utter.onerror = () => {
+			utter.onerror = (event) => {
+				if (gen !== generation) return;
+				if (ignoringCancelErrors || isCancelLikeError(event.error)) return;
 				setSpeakingUi(false);
 				setActive(null);
 			};
 			speechSynthesis.speak(utter);
 		};
 
-		speakNext();
+		// cancel 直後の speak 失敗を避ける
+		resumeTimer = setTimeout(() => {
+			resumeTimer = null;
+			if (gen !== generation || !speaking) return;
+			speakNext();
+		}, AFTER_CANCEL_MS);
 	};
 
 	const refreshVoice = () => {
 		voice = pickJapaneseVoice();
 	};
 	refreshVoice();
-	speechSynthesis.addEventListener('voiceschanged', refreshVoice);
+	speechSynthesis.addEventListener('voiceschanged', refreshVoice, { signal });
 
 	syncRateUi();
 	els.stopBtn.disabled = true;
 
-	els.playBtn.addEventListener('click', () => {
-		if (speaking) return;
-		speakFrom(0);
-	});
+	els.playBtn.addEventListener(
+		'click',
+		() => {
+			if (speaking) return;
+			speakFrom(0);
+		},
+		{ signal },
+	);
 
-	els.stopBtn.addEventListener('click', () => stop());
+	els.stopBtn.addEventListener('click', () => stop(), { signal });
 
-	els.rateInput.addEventListener('input', () => {
-		rate = clampRate(Number(els.rateInput.value));
-		syncRateUi();
-		try {
-			localStorage.setItem(RATE_STORAGE_KEY, String(rate));
-		} catch {
-			/* ignore */
-		}
-		if (speaking) {
-			const resumeAt = index;
-			speakFrom(resumeAt);
-		}
-	});
+	els.rateInput.addEventListener(
+		'input',
+		() => {
+			rate = clampRate(Number(els.rateInput.value));
+			syncRateUi();
+			try {
+				localStorage.setItem(RATE_STORAGE_KEY, String(rate));
+			} catch {
+				/* ignore */
+			}
+			if (speaking) {
+				const resumeAt = index;
+				speakFrom(resumeAt);
+			}
+		},
+		{ signal },
+	);
+
+	const startFromBlock = (i: number, event: Event) => {
+		const target = event.target as HTMLElement | null;
+		if (target?.closest('a')) return;
+		event.preventDefault();
+		speakFrom(i);
+	};
 
 	for (let i = 0; i < blocks.length; i += 1) {
-		blocks[i].addEventListener('click', (event) => {
-			const target = event.target as HTMLElement | null;
-			// リンククリックは遷移を優先
-			if (target?.closest('a')) return;
-			event.preventDefault();
-			speakFrom(i);
-		});
+		const block = blocks[i];
+		block.addEventListener('click', (event) => startFromBlock(i, event), { signal });
+		block.addEventListener(
+			'keydown',
+			(event) => {
+				if (event.key !== 'Enter' && event.key !== ' ') return;
+				startFromBlock(i, event);
+			},
+			{ signal },
+		);
 	}
 
-	window.addEventListener('pagehide', () => stop());
+	const onPageHide = () => stop();
+	window.addEventListener('pagehide', onPageHide, { signal });
+
+	pageCleanup = () => {
+		clearResumeTimer();
+		generation += 1;
+		markIntentionalCancel();
+		speechSynthesis.cancel();
+		ac.abort();
+		for (const block of blocks) {
+			block.classList.remove('tts-speakable', 'tts-active');
+			block.removeAttribute('role');
+			block.removeAttribute('aria-label');
+			block.removeAttribute('title');
+			// tabindex は元からあった可能性があるので 0 を付けた分だけ外すのは難しい → 付けたものとして除去
+			block.removeAttribute('tabindex');
+		}
+		setSpeakingUi(false);
+	};
 }
 
-if (document.readyState === 'loading') {
-	document.addEventListener('DOMContentLoaded', initTts, { once: true });
-} else {
+function bootTts() {
 	initTts();
+}
+
+// 初回 + Astro View Transitions 後
+document.addEventListener('astro:page-load', bootTts);
+if (document.readyState === 'loading') {
+	document.addEventListener('DOMContentLoaded', bootTts, { once: true });
+} else if (!document.documentElement.hasAttribute('data-astro-transition')) {
+	// astro:page-load がすぐ来る環境では二重起動するが、pageCleanup で抑止する
+	bootTts();
 }
