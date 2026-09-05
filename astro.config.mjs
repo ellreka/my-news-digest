@@ -30,6 +30,9 @@ export default defineConfig({
 			// サイドバーを日付降順（新しい順）に並べ替える
 			routeMiddleware: './src/starlightRouteData.ts',
 			pagefind: true,
+			components: {
+				MarkdownContent: './src/components/MarkdownContentWithTts.astro',
+			},
 		}),
 	],
 });
