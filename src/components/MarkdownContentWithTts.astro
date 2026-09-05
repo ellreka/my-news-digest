@@ -1,0 +1,35 @@
+---
+import Default from '@astrojs/starlight/components/MarkdownContent.astro';
+import '../styles/tts.css';
+---
+
+<Default><slot /></Default>
+
+<aside class="tts-unsupported" data-tts-unsupported hidden>
+	このブラウザは読み上げ（Web Speech API）に対応していません。
+</aside>
+
+<div class="tts-toolbar" data-tts-toolbar hidden>
+	<p class="tts-toolbar__hint">本文の行をクリック／Enter で、そこから読み上げます。</p>
+	<button type="button" data-tts-play>再生</button>
+	<button type="button" data-tts-stop>停止</button>
+	<label class="tts-toolbar__voice">
+		音声
+		<select data-tts-voice aria-label="読み上げ音声（再生モデル）"></select>
+	</label>
+	<label class="tts-toolbar__rate">
+		速度
+		<input
+			type="range"
+			data-tts-rate
+			min="0.5"
+			max="2"
+			step="0.05"
+			value="1"
+			aria-label="読み上げ速度"
+		/>
+		<span data-tts-rate-value>1.00x</span>
+	</label>
+</div>
+
+<script src="../scripts/tts-reader.ts"></script>
