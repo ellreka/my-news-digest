@@ -1,4 +1,5 @@
 const RATE_STORAGE_KEY = 'my-news-digest:ttsRate';
+const VOICE_STORAGE_KEY = 'my-news-digest:ttsVoiceURI';
 const DEFAULT_RATE = 1;
 const MIN_RATE = 0.5;
 const MAX_RATE = 2;
@@ -11,6 +12,7 @@ type TtsElements = {
 	stopBtn: HTMLButtonElement;
 	rateInput: HTMLInputElement;
 	rateValue: HTMLElement;
+	voiceSelect: HTMLSelectElement;
 	unsupported: HTMLElement | null;
 };
 
@@ -30,7 +32,6 @@ function collectBlocks(root: Element): HTMLElement[] {
 	const walk = (el: Element) => {
 		for (const child of Array.from(el.children)) {
 			const tag = child.tagName.toLowerCase();
-			// pre（コード）は読み上げ対象外
 			if (tag === 'pre') continue;
 			if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote'].includes(tag)) {
 				pushIfText(child as HTMLElement);
@@ -58,10 +59,31 @@ function readStoredRate(): number {
 	}
 }
 
-function pickJapaneseVoice(): SpeechSynthesisVoice | null {
-	const voices = speechSynthesis.getVoices();
+function readStoredVoiceURI(): string | null {
+	try {
+		return localStorage.getItem(VOICE_STORAGE_KEY);
+	} catch {
+		return null;
+	}
+}
+
+function voiceLabel(v: SpeechSynthesisVoice): string {
+	const local = v.localService ? '端末' : 'オンライン';
+	return `${v.name} (${v.lang}, ${local})`;
+}
+
+function sortVoices(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
+	return [...voices].sort((a, b) => {
+		const aJa = a.lang.toLowerCase().startsWith('ja') ? 0 : 1;
+		const bJa = b.lang.toLowerCase().startsWith('ja') ? 0 : 1;
+		if (aJa !== bJa) return aJa - bJa;
+		return a.name.localeCompare(b.name, 'ja');
+	});
+}
+
+function defaultVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
 	const ja = voices.filter((v) => v.lang.toLowerCase().startsWith('ja'));
-	return ja.find((v) => /google|premium|enhanced|neural/i.test(v.name)) ?? ja[0] ?? null;
+	return ja.find((v) => /google|premium|enhanced|neural/i.test(v.name)) ?? ja[0] ?? voices[0] ?? null;
 }
 
 function isCancelLikeError(error: string | undefined): boolean {
@@ -77,9 +99,9 @@ function isCancelLikeError(error: string | undefined): boolean {
 }
 
 function initTts() {
-	// View Transitions / astro:page-load の再入でリスナーが積み上がらないように掃除
 	pageCleanup?.();
 	pageCleanup = null;
+	document.body.classList.remove('tts-bar-visible');
 
 	if (!isDigestPage()) return;
 
@@ -91,23 +113,35 @@ function initTts() {
 	const stopBtn = toolbar.querySelector<HTMLButtonElement>('[data-tts-stop]');
 	const rateInput = toolbar.querySelector<HTMLInputElement>('[data-tts-rate]');
 	const rateValue = toolbar.querySelector<HTMLElement>('[data-tts-rate-value]');
+	const voiceSelect = toolbar.querySelector<HTMLSelectElement>('[data-tts-voice]');
 	const unsupported = document.querySelector<HTMLElement>('[data-tts-unsupported]');
-	if (!playBtn || !stopBtn || !rateInput || !rateValue) return;
+	if (!playBtn || !stopBtn || !rateInput || !rateValue || !voiceSelect) return;
 
 	toolbar.hidden = false;
+	document.body.classList.add('tts-bar-visible');
 
 	if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
 		if (unsupported) unsupported.hidden = false;
 		playBtn.disabled = true;
 		stopBtn.disabled = true;
 		rateInput.disabled = true;
+		voiceSelect.disabled = true;
 		return;
 	}
 
-	const els: TtsElements = { toolbar, playBtn, stopBtn, rateInput, rateValue, unsupported };
+	const els: TtsElements = {
+		toolbar,
+		playBtn,
+		stopBtn,
+		rateInput,
+		rateValue,
+		voiceSelect,
+		unsupported,
+	};
 	const blocks = collectBlocks(content);
 	if (blocks.length === 0) {
 		toolbar.hidden = true;
+		document.body.classList.remove('tts-bar-visible');
 		return;
 	}
 
@@ -123,9 +157,7 @@ function initTts() {
 	let index = 0;
 	let speaking = false;
 	let voice: SpeechSynthesisVoice | null = null;
-	/** 意図した cancel 中は onerror で UI を落とさない */
 	let ignoringCancelErrors = false;
-	/** speakFrom 世代。古い onend / 遅延開始を無効化 */
 	let generation = 0;
 	let resumeTimer: ReturnType<typeof setTimeout> | null = null;
 	const ac = new AbortController();
@@ -134,6 +166,42 @@ function initTts() {
 	const syncRateUi = () => {
 		els.rateInput.value = String(rate);
 		els.rateValue.textContent = `${rate.toFixed(2)}x`;
+	};
+
+	const populateVoices = () => {
+		const voices = sortVoices(speechSynthesis.getVoices());
+		const previous = els.voiceSelect.value || readStoredVoiceURI() || '';
+		els.voiceSelect.replaceChildren();
+
+		const placeholder = document.createElement('option');
+		placeholder.value = '';
+		placeholder.textContent = voices.length ? '自動（おすすめ）' : '音声を読み込み中…';
+		els.voiceSelect.append(placeholder);
+
+		for (const v of voices) {
+			const opt = document.createElement('option');
+			opt.value = v.voiceURI;
+			opt.textContent = voiceLabel(v);
+			els.voiceSelect.append(opt);
+		}
+
+		if (previous && voices.some((v) => v.voiceURI === previous)) {
+			els.voiceSelect.value = previous;
+			voice = voices.find((v) => v.voiceURI === previous) ?? null;
+		} else {
+			els.voiceSelect.value = '';
+			voice = defaultVoice(voices);
+		}
+		els.voiceSelect.disabled = voices.length === 0;
+	};
+
+	const resolveVoice = (): SpeechSynthesisVoice | null => {
+		const voices = speechSynthesis.getVoices();
+		const selected = els.voiceSelect.value;
+		if (selected) {
+			return voices.find((v) => v.voiceURI === selected) ?? null;
+		}
+		return defaultVoice(voices);
 	};
 
 	const setActive = (i: number | null) => {
@@ -182,6 +250,7 @@ function initTts() {
 
 		index = Math.max(0, Math.min(start, blocks.length - 1));
 		setSpeakingUi(true);
+		voice = resolveVoice();
 
 		const speakNext = () => {
 			if (gen !== generation || !speaking) return;
@@ -200,8 +269,13 @@ function initTts() {
 			}
 			const utter = new SpeechSynthesisUtterance(text);
 			utter.rate = rate;
-			utter.lang = 'ja-JP';
-			if (voice) utter.voice = voice;
+			const currentVoice = voice ?? resolveVoice();
+			if (currentVoice) {
+				utter.voice = currentVoice;
+				utter.lang = currentVoice.lang;
+			} else {
+				utter.lang = 'ja-JP';
+			}
 			utter.onend = () => {
 				if (gen !== generation || !speaking) return;
 				index += 1;
@@ -216,7 +290,6 @@ function initTts() {
 			speechSynthesis.speak(utter);
 		};
 
-		// cancel 直後の speak 失敗を避ける
 		resumeTimer = setTimeout(() => {
 			resumeTimer = null;
 			if (gen !== generation || !speaking) return;
@@ -224,11 +297,14 @@ function initTts() {
 		}, AFTER_CANCEL_MS);
 	};
 
-	const refreshVoice = () => {
-		voice = pickJapaneseVoice();
-	};
-	refreshVoice();
-	speechSynthesis.addEventListener('voiceschanged', refreshVoice, { signal });
+	populateVoices();
+	speechSynthesis.addEventListener(
+		'voiceschanged',
+		() => {
+			populateVoices();
+		},
+		{ signal },
+	);
 
 	syncRateUi();
 	els.stopBtn.disabled = true;
@@ -254,10 +330,23 @@ function initTts() {
 			} catch {
 				/* ignore */
 			}
-			if (speaking) {
-				const resumeAt = index;
-				speakFrom(resumeAt);
+			if (speaking) speakFrom(index);
+		},
+		{ signal },
+	);
+
+	els.voiceSelect.addEventListener(
+		'change',
+		() => {
+			const uri = els.voiceSelect.value;
+			try {
+				if (uri) localStorage.setItem(VOICE_STORAGE_KEY, uri);
+				else localStorage.removeItem(VOICE_STORAGE_KEY);
+			} catch {
+				/* ignore */
 			}
+			voice = resolveVoice();
+			if (speaking) speakFrom(index);
 		},
 		{ signal },
 	);
@@ -282,8 +371,7 @@ function initTts() {
 		);
 	}
 
-	const onPageHide = () => stop();
-	window.addEventListener('pagehide', onPageHide, { signal });
+	window.addEventListener('pagehide', () => stop(), { signal });
 
 	pageCleanup = () => {
 		clearResumeTimer();
@@ -291,12 +379,12 @@ function initTts() {
 		markIntentionalCancel();
 		speechSynthesis.cancel();
 		ac.abort();
+		document.body.classList.remove('tts-bar-visible');
 		for (const block of blocks) {
 			block.classList.remove('tts-speakable', 'tts-active');
 			block.removeAttribute('role');
 			block.removeAttribute('aria-label');
 			block.removeAttribute('title');
-			// tabindex は元からあった可能性があるので 0 を付けた分だけ外すのは難しい → 付けたものとして除去
 			block.removeAttribute('tabindex');
 		}
 		setSpeakingUi(false);
@@ -307,11 +395,9 @@ function bootTts() {
 	initTts();
 }
 
-// 初回 + Astro View Transitions 後
 document.addEventListener('astro:page-load', bootTts);
 if (document.readyState === 'loading') {
 	document.addEventListener('DOMContentLoaded', bootTts, { once: true });
 } else if (!document.documentElement.hasAttribute('data-astro-transition')) {
-	// astro:page-load がすぐ来る環境では二重起動するが、pageCleanup で抑止する
 	bootTts();
 }
