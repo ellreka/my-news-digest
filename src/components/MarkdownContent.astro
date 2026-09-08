@@ -1,0 +1,19 @@
+---
+import MarkdownContent from '@astrojs/starlight/components/MarkdownContent.astro';
+import TtsPlayer from './TtsPlayer.astro';
+
+const isDigest = Astro.locals.starlightRoute.entry.id.startsWith('digests/');
+---
+
+{
+	isDigest ? (
+		<>
+			<div data-tts-content>
+				<MarkdownContent><slot /></MarkdownContent>
+			</div>
+			<TtsPlayer />
+		</>
+	) : (
+		<MarkdownContent><slot /></MarkdownContent>
+	)
+}

@@ -16,9 +16,23 @@ pnpm install
 pnpm dev       # http://localhost:4321
 pnpm build     # dist/ に出力
 pnpm preview
+pnpm test      # 読み上げ状態・停止/切替競合・速度復元の回帰テスト
 ```
 
 Node.js 22 以上、pnpm 10 系（`packageManager` にピン留め済み）。
+
+ダイジェストページ下部の再生アイコンで本文を文単位に読み上げる。再生中は本文を
+タップするとその文へ移動できる（外部リンクは別タブで開く）。速度はバーで調整でき、音量調整はスピーカーアイコンから開く。
+速度は次回アクセスにも引き継ぐ。設定の変更は次の文から反映する。停止後に再生すると先頭から読み直す。
+黄色で示す再生中の文を画面内に収めるよう追従し、手動スクロールで追従を止める。
+操作バーの現在位置アイコンで再生中の文へ戻り、追従を再開できる。
+
+ブラウザで本文分割の回帰テストを実行するには、開発サーバー上の開発者コンソールで
+`await import('/tests/tts-content.test.ts').then(m => m.runTtsContentTests())` を実行する。
+リンク・強調をまたぐ文、入れ子リスト、除外要素、空白、文分割のフォールバックを確認する。
+プレーヤーの設定反映と自動スクロールの回帰テストは
+`await import('/tests/tts-player.test.ts').then(m => m.runTtsPlayerTests())` で実行する。
+音声エンジンの動作は iOS Safari / Android Chrome の実機でも確認する。
 
 ## 構成
 

@@ -1,0 +1,66 @@
+---
+import '../styles/tts.css';
+---
+
+<section
+	class="tts-player"
+	data-tts-player
+	data-pagefind-ignore
+	aria-label="読み上げプレーヤー"
+	hidden
+>
+	<div class="tts-player__buttons">
+		<button type="button" class="tts-player__play" data-tts-play aria-label="再生" title="再生" disabled>
+			<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+				<path d="M7 4.5v15L20 12z" fill="currentColor" />
+			</svg>
+		</button>
+		<button type="button" data-tts-stop aria-label="停止" title="停止" disabled hidden>
+			<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+				<rect x="5" y="5" width="14" height="14" rx="1" fill="currentColor" />
+			</svg>
+		</button>
+		<span class="tts-player__error" data-tts-error role="img" title="読み上げエラー" hidden>
+			<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+				<path d="m12 3 10 18H2L12 3Z" fill="currentColor" />
+				<path d="M12 9v5m0 3v.1" fill="none" stroke="var(--sl-color-bg)" stroke-width="2" stroke-linecap="round" />
+			</svg>
+		</span>
+	</div>
+	<div class="tts-player__settings">
+		<div class="tts-player__setting">
+			<div class="tts-player__setting-caption">
+				<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+					<path d="M4.2 19a9 9 0 1 1 15.6 0M5 12H3m18 0h-2M12 3v2M5.6 5.6 7 7m12.5-3.5-6.2 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+					<circle cx="12" cy="15" r="2" fill="currentColor" />
+				</svg>
+				<output for="tts-rate" data-tts-rate-value aria-live="off">1.0倍</output>
+			</div>
+			<input id="tts-rate" data-tts-rate aria-label="速度" title="速度" type="range" min="0.5" max="3" step="0.1" value="1" disabled />
+		</div>
+	</div>
+	<details class="tts-player__volume" data-tts-volume-panel>
+		<summary aria-label="音量調整" title="音量調整">
+			<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+				<path d="M11 4 6 8H3v8h3l5 4V4Z" fill="currentColor" />
+				<path d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+			</svg>
+		</summary>
+		<div class="tts-player__volume-panel">
+			<input id="tts-volume" data-tts-volume aria-label="音量" title="音量" type="range" min="0" max="100" step="5" value="100" disabled />
+			<output for="tts-volume" data-tts-volume-value aria-live="off">100%</output>
+		</div>
+	</details>
+	<button type="button" data-tts-follow aria-label="読み上げ位置に戻る" title="読み上げ位置に戻る" hidden>
+		<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+			<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8" />
+			<circle cx="12" cy="12" r="2.5" fill="currentColor" />
+			<path d="M12 2v3m0 14v3M2 12h3m14 0h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+		</svg>
+	</button>
+	<p class="tts-player__status" data-tts-status role="status" aria-live="polite" aria-atomic="true"></p>
+</section>
+
+<script>
+	import '../scripts/tts-reader';
+</script>

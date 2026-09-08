@@ -9,6 +9,7 @@
     "start": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "astro": "astro",
     "deploy": "pnpm run build && wrangler deploy"
   },
