@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.1",
   "private": true,
-  "packageManager": "pnpm@10.34.4",
+  "packageManager": "pnpm@10.34.9",
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
@@ -14,11 +14,11 @@
     "deploy": "pnpm run build && wrangler deploy"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.41.7",
-    "astro": "^7.1.6",
-    "sharp": "^0.35.3"
+    "@astrojs/starlight": "^0.42.11",
+    "astro": "^7.4.11",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
-    "wrangler": "^4.119.0"
+    "wrangler": "^4.161.0"
   }
 }

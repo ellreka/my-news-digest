@@ -17,8 +17,9 @@
 	// 	}
 	// ],
 
-	// Cloudflare Access はカスタムドメインにのみ適用されるため、
-	// 認証を迂回できる workers.dev / preview URL は無効化する
+	// 現在の公開先は workers.dev（認証なしで閲覧可能と確認済み）。
+	// 別途承認したドメイン / Access 設定の移行までは公開先を維持する。
+	// preview URL のみ無効化（workers.dev 自体は有効）。
 	"workers_dev": true,
 	"preview_urls": false
 }
